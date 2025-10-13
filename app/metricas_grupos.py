@@ -42,17 +42,27 @@ def calcular_metricas_grupo(alumnos_grupo: List[Dict[str, Any]], nombre_grupo: s
         aciertos_materia = [a['calificaciones'][materia]['aciertos'] for a in alumnos_grupo]
         total_preguntas = alumnos_grupo[0]['calificaciones'][materia]['total']
 
-        promedio_materia = sum(aciertos_materia) / total_alumnos
-        porcentaje_promedio = (promedio_materia / total_preguntas * 100) if total_preguntas > 0 else 0
+        # Prevenir división por cero
+        if total_preguntas > 0:
+            promedio_materia = sum(aciertos_materia) / total_alumnos
+            porcentaje_promedio = (promedio_materia / total_preguntas * 100)
+            alumnos_con_100 = sum(1 for a in aciertos_materia if a == total_preguntas)
+            alumnos_aprobados = sum(1 for a in aciertos_materia if (a / total_preguntas) * 100 >= 60)
+        else:
+            # Si la materia tiene 0 preguntas, usar valores por defecto
+            promedio_materia = 0
+            porcentaje_promedio = 0
+            alumnos_con_100 = 0
+            alumnos_aprobados = 0
 
         metricas_materias[materia] = {
             'promedio_aciertos': round(promedio_materia, 2),
             'total_preguntas': total_preguntas,
             'porcentaje_promedio': round(porcentaje_promedio, 2),
-            'max_aciertos': max(aciertos_materia),
-            'min_aciertos': min(aciertos_materia),
-            'alumnos_con_100': sum(1 for a in aciertos_materia if a == total_preguntas),
-            'alumnos_aprobados': sum(1 for a in aciertos_materia if (a / total_preguntas) * 100 >= 60)
+            'max_aciertos': max(aciertos_materia) if aciertos_materia else 0,
+            'min_aciertos': min(aciertos_materia) if aciertos_materia else 0,
+            'alumnos_con_100': alumnos_con_100,
+            'alumnos_aprobados': alumnos_aprobados
         }
 
     # Distribución de calificaciones
@@ -62,12 +72,19 @@ def calcular_metricas_grupo(alumnos_grupo: List[Dict[str, Any]], nombre_grupo: s
     regular = sum(1 for a in alumnos_grupo if 60 <= a['porcentaje_global'] < 70)
     necesita_mejorar = sum(1 for a in alumnos_grupo if a['porcentaje_global'] < 60)
 
+    # Calcular porcentaje promedio del grupo con validación
+    total_preguntas_examen = alumnos_grupo[0]['total_preguntas']
+    if total_preguntas_examen > 0:
+        porcentaje_promedio_grupo = (promedio_grupo / total_preguntas_examen * 100)
+    else:
+        porcentaje_promedio_grupo = 0
+
     return {
         'nombre_grupo': nombre_grupo,
         'total_alumnos': total_alumnos,
         'promedio_aciertos': round(promedio_grupo, 2),
-        'total_preguntas': alumnos_grupo[0]['total_preguntas'],
-        'porcentaje_promedio_grupo': round((promedio_grupo / alumnos_grupo[0]['total_preguntas'] * 100), 2),
+        'total_preguntas': total_preguntas_examen,
+        'porcentaje_promedio_grupo': round(porcentaje_promedio_grupo, 2),
         'max_aciertos': max_aciertos,
         'min_aciertos': min_aciertos,
         'mejor_alumno': mejor_alumno['nombre'],
