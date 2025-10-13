@@ -3,12 +3,9 @@
 Sistema de Calificaciones - Club de Matemáticas Lobatchewsky
 Interfaz moderna y minimalista
 """
-
 import os
-import sys
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, scrolledtext
-from tkinter import font as tkfont
 from datetime import datetime
 import threading
 
@@ -41,9 +38,10 @@ class VentanaGeneradorClaveModerna(tk.Toplevel):
     def __init__(self, parent):
         super().__init__(parent)
         self.title("Crear Clave de Respuestas")
-        self.geometry("750x700")
+        self.geometry("800x800")  # Aumentado el tamaño inicial
         self.configure(bg=COLORS['gris_claro'])
-        self.resizable(False, False)
+        self.resizable(True, True)  # Ahora es redimensionable
+        self.minsize(750, 700)  # Tamaño mínimo
 
         self.generador = None
         self.total_preguntas = tk.IntVar(value=110)
@@ -54,7 +52,36 @@ class VentanaGeneradorClaveModerna(tk.Toplevel):
         self.transient(parent)
         self.grab_set()
 
-        # Centrar ventana
+        # Centrar ventana DESPUÉS de crear interfaz
+        self.update_idletasks()
+        self.center_window()
+
+        # Forzar actualización para asegurar visibilidad
+        self.after(100, self.ajustar_tamanio)
+
+    def ajustar_tamanio(self):
+        """Ajusta el tamaño de la ventana para mostrar todo el contenido."""
+        self.update_idletasks()
+
+        # Obtener el tamaño requerido del contenido
+        required_height = self.winfo_reqheight()
+        required_width = self.winfo_reqwidth()
+
+        # Asegurar que la ventana sea lo suficientemente grande
+        current_width = self.winfo_width()
+        current_height = self.winfo_height()
+
+        # Si el contenido es más grande que la ventana actual, ajustar
+        new_width = max(current_width, required_width + 40, 800)
+        new_height = max(current_height, required_height + 40, 800)
+
+        # Limitar al 90% del tamaño de la pantalla
+        screen_width = self.winfo_screenwidth()
+        screen_height = self.winfo_screenheight()
+        new_width = min(new_width, int(screen_width * 0.9))
+        new_height = min(new_height, int(screen_height * 0.9))
+
+        self.geometry(f'{new_width}x{new_height}')
         self.center_window()
 
     def center_window(self):
@@ -67,8 +94,31 @@ class VentanaGeneradorClaveModerna(tk.Toplevel):
         self.geometry(f'{width}x{height}+{x}+{y}')
 
     def crear_interfaz(self):
-        # Frame principal con padding
-        main_frame = tk.Frame(self, bg=COLORS['gris_claro'])
+        # Canvas con scrollbar para todo el contenido
+        canvas = tk.Canvas(self, bg=COLORS['gris_claro'], highlightthickness=0)
+        scrollbar = tk.Scrollbar(self, orient="vertical", command=canvas.yview)
+        scrollable_frame = tk.Frame(canvas, bg=COLORS['gris_claro'])
+
+        scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        # Empaquetar canvas y scrollbar
+        canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        # Habilitar scroll con la rueda del mouse
+        def _on_mousewheel(event):
+            canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+
+        canvas.bind_all("<MouseWheel>", _on_mousewheel)
+
+        # Frame principal con padding DENTRO del canvas
+        main_frame = tk.Frame(scrollable_frame, bg=COLORS['gris_claro'])
         main_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
 
         # Título
@@ -96,9 +146,21 @@ class VentanaGeneradorClaveModerna(tk.Toplevel):
                    textvariable=self.total_preguntas,
                    width=10, font=('Open Sans', 10)).pack(side=tk.LEFT, padx=5)
 
-        self.crear_boton(inner_frame, "Inicializar",
-                         self.inicializar_generador,
-                         side=tk.LEFT, padx=15)
+        # Botón Inicializar
+        btn_init = tk.Button(
+            inner_frame,
+            text="Inicializar",
+            command=self.inicializar_generador,
+            font=('Open Sans', 9, 'bold'),
+            bg=COLORS['principal'],
+            fg=COLORS['blanco'],
+            relief=tk.FLAT,
+            bd=0,
+            padx=15,
+            pady=8,
+            cursor='hand2'
+        )
+        btn_init.pack(side=tk.LEFT, padx=15)
 
         # Frame de entrada
         entrada_frame = self.crear_frame_seccion(main_frame,
@@ -111,7 +173,7 @@ class VentanaGeneradorClaveModerna(tk.Toplevel):
                  fg=COLORS['gris_oscuro']).pack(anchor=tk.W, padx=15, pady=(10, 5))
 
         self.texto_respuestas = scrolledtext.ScrolledText(
-            entrada_frame, height=15,
+            entrada_frame, height=12,  # Reducido para dar espacio a los botones
             font=('Courier New', 10),
             wrap=tk.WORD,
             bg=COLORS['blanco'],
@@ -119,20 +181,60 @@ class VentanaGeneradorClaveModerna(tk.Toplevel):
             bd=1,
             highlightthickness=1,
             highlightbackground=COLORS['gris_medio'])
-        self.texto_respuestas.pack(fill=tk.BOTH, expand=True,
+        self.texto_respuestas.pack(fill=tk.BOTH, expand=False,
                                    padx=15, pady=(0, 10))
 
         # Botones de acción
         btn_frame = tk.Frame(entrada_frame, bg=COLORS['blanco'])
         btn_frame.pack(fill=tk.X, padx=15, pady=(0, 15))
 
-        self.crear_boton(btn_frame, "📝 Procesar",
-                         self.procesar_respuestas, side=tk.LEFT, padx=5)
-        self.crear_boton(btn_frame, "🗑️ Limpiar",
-                         self.limpiar, side=tk.LEFT, padx=5,
-                         color=COLORS['gris_medio'])
-        self.crear_boton(btn_frame, "👁️ Vista Previa",
-                         self.mostrar_vista_previa, side=tk.LEFT, padx=5)
+        # Botón Procesar
+        btn_procesar = tk.Button(
+            btn_frame,
+            text="📝 Procesar",
+            command=self.procesar_respuestas,
+            font=('Open Sans', 9, 'bold'),
+            bg=COLORS['principal'],
+            fg=COLORS['blanco'],
+            relief=tk.FLAT,
+            bd=0,
+            padx=15,
+            pady=8,
+            cursor='hand2'
+        )
+        btn_procesar.pack(side=tk.LEFT, padx=5)
+
+        # Botón Limpiar
+        btn_limpiar = tk.Button(
+            btn_frame,
+            text="🗑️ Limpiar",
+            command=self.limpiar,
+            font=('Open Sans', 9, 'bold'),
+            bg=COLORS['gris_medio'],
+            fg=COLORS['blanco'],
+            relief=tk.FLAT,
+            bd=0,
+            padx=15,
+            pady=8,
+            cursor='hand2'
+        )
+        btn_limpiar.pack(side=tk.LEFT, padx=5)
+
+        # Botón Vista Previa
+        btn_preview = tk.Button(
+            btn_frame,
+            text="👁️ Vista Previa",
+            command=self.mostrar_vista_previa,
+            font=('Open Sans', 9, 'bold'),
+            bg=COLORS['principal'],
+            fg=COLORS['blanco'],
+            relief=tk.FLAT,
+            bd=0,
+            padx=15,
+            pady=8,
+            cursor='hand2'
+        )
+        btn_preview.pack(side=tk.LEFT, padx=5)
 
         # Frame de estado
         estado_frame = self.crear_frame_seccion(main_frame, "Estado")
@@ -145,19 +247,79 @@ class VentanaGeneradorClaveModerna(tk.Toplevel):
                                    anchor=tk.W)
         self.label_info.pack(fill=tk.X, padx=15, pady=10)
 
-        # Botones finales
-        final_frame = tk.Frame(main_frame, bg=COLORS['gris_claro'])
-        final_frame.pack(fill=tk.X, pady=(10, 0))
+        # ========== BOTONES FINALES - AHORA CON FONDO DESTACADO ==========
+        final_container = tk.Frame(main_frame, bg=COLORS['gris_medio'],
+                                   relief=tk.RAISED, bd=2)
+        final_container.pack(fill=tk.X, pady=(20, 10))
 
-        self.crear_boton(final_frame, "💾 Generar CSV",
-                         self.generar_csv,
-                         side=tk.LEFT, padx=5,
-                         color=COLORS['exito'])
+        final_frame = tk.Frame(final_container, bg=COLORS['gris_medio'])
+        final_frame.pack(fill=tk.X, padx=10, pady=10)
 
-        self.crear_boton(final_frame, "Cancelar",
-                         self.destroy,
-                         side=tk.RIGHT, padx=5,
-                         color=COLORS['gris_medio'])
+        # Botón Generar CSV - MÁS GRANDE Y DESTACADO
+        self.btn_generar = tk.Button(
+            final_frame,
+            text="💾 Generar y Guardar CSV",
+            command=self.generar_csv,
+            font=('Open Sans', 11, 'bold'),
+            bg=COLORS['exito'],
+            fg=COLORS['blanco'],
+            relief=tk.RAISED,
+            bd=2,
+            padx=25,
+            pady=12,
+            cursor='hand2'
+        )
+        self.btn_generar.pack(side=tk.LEFT, padx=10)
+
+        # Hover para Generar
+        def on_enter_generar(e):
+            self.btn_generar['bg'] = self.oscurecer_color(COLORS['exito'])
+            self.btn_generar['relief'] = tk.SUNKEN
+
+        def on_leave_generar(e):
+            self.btn_generar['bg'] = COLORS['exito']
+            self.btn_generar['relief'] = tk.RAISED
+
+        self.btn_generar.bind("<Enter>", on_enter_generar)
+        self.btn_generar.bind("<Leave>", on_leave_generar)
+
+        # Botón Cancelar
+        self.btn_cancelar = tk.Button(
+            final_frame,
+            text="✖ Cancelar",
+            command=self.destroy,
+            font=('Open Sans', 10, 'bold'),
+            bg=COLORS['error'],
+            fg=COLORS['blanco'],
+            relief=tk.RAISED,
+            bd=2,
+            padx=20,
+            pady=12,
+            cursor='hand2'
+        )
+        self.btn_cancelar.pack(side=tk.RIGHT, padx=10)
+
+        # Hover para Cancelar
+        def on_enter_cancelar(e):
+            self.btn_cancelar['bg'] = self.oscurecer_color(COLORS['error'])
+            self.btn_cancelar['relief'] = tk.SUNKEN
+
+        def on_leave_cancelar(e):
+            self.btn_cancelar['bg'] = COLORS['error']
+            self.btn_cancelar['relief'] = tk.RAISED
+
+        self.btn_cancelar.bind("<Enter>", on_enter_cancelar)
+        self.btn_cancelar.bind("<Leave>", on_leave_cancelar)
+
+        # Nota informativa
+        nota_label = tk.Label(
+            final_frame,
+            text="← Genere el archivo CSV cuando esté listo",
+            font=('Open Sans', 9, 'italic'),
+            bg=COLORS['gris_medio'],
+            fg=COLORS['gris_oscuro']
+        )
+        nota_label.pack(side=tk.LEFT, padx=20)
 
     def crear_frame_seccion(self, parent, titulo):
         """Crea un frame de sección con título."""
@@ -179,35 +341,6 @@ class VentanaGeneradorClaveModerna(tk.Toplevel):
         separator.pack(fill=tk.X, padx=15, pady=(0, 5))
 
         return frame
-
-    def crear_boton(self, parent, texto, comando, side=tk.LEFT,
-                    padx=0, color=None):
-        """Crea un botón con estilo moderno."""
-        bg_color = color or COLORS['principal']
-
-        btn = tk.Button(parent, text=texto,
-                        command=comando,
-                        font=('Open Sans', 9, 'bold'),
-                        bg=bg_color,
-                        fg=COLORS['blanco'],
-                        relief=tk.FLAT,
-                        bd=0,
-                        padx=15,
-                        pady=8,
-                        cursor='hand2')
-        btn.pack(side=side, padx=padx)
-
-        # Efecto hover
-        def on_enter(e):
-            btn['bg'] = self.oscurecer_color(bg_color)
-
-        def on_leave(e):
-            btn['bg'] = bg_color
-
-        btn.bind("<Enter>", on_enter)
-        btn.bind("<Leave>", on_leave)
-
-        return btn
 
     def oscurecer_color(self, color):
         """Oscurece un color hex."""
@@ -263,8 +396,20 @@ class VentanaGeneradorClaveModerna(tk.Toplevel):
         texto.insert("1.0", reporte)
         texto.config(state=tk.DISABLED)
 
-        self.crear_boton(ventana, "Cerrar",
-                         ventana.destroy).pack(pady=10)
+        btn_cerrar = tk.Button(
+            ventana,
+            text="Cerrar",
+            command=ventana.destroy,
+            font=('Open Sans', 9, 'bold'),
+            bg=COLORS['principal'],
+            fg=COLORS['blanco'],
+            relief=tk.FLAT,
+            bd=0,
+            padx=15,
+            pady=8,
+            cursor='hand2'
+        )
+        btn_cerrar.pack(pady=10)
 
     def actualizar_info(self):
         if self.generador is None:
@@ -299,7 +444,7 @@ class VentanaGeneradorClaveModerna(tk.Toplevel):
         )
 
         if filename:
-            if self.generador.generar_csv(filename, formato='pregunta_n'):
+            if self.generador.generar_csv(filename, formato='n.'):
                 messagebox.showinfo("✓ Éxito",
                                     f"Archivo generado:\n{filename}")
                 self.destroy()
@@ -481,21 +626,19 @@ class SistemaCalificacionesLobatchewsky:
 
         if width:
             btn.config(width=width)
-        else:
-            btn.pack(fill=tk.X, padx=padx, pady=pady)
-            btn.pack_propagate(False)
 
-        if not width:
-            # Efecto hover
-            def on_enter(e):
-                if btn['state'] == tk.NORMAL:
-                    btn['bg'] = self.oscurecer_color(bg_color)
+        btn.pack(fill=tk.X, padx=padx, pady=pady)
 
-            def on_leave(e):
-                btn['bg'] = bg_color
+        # Efecto hover
+        def on_enter(e):
+            if btn['state'] == tk.NORMAL:
+                btn['bg'] = self.oscurecer_color(bg_color)
 
-            btn.bind("<Enter>", on_enter)
-            btn.bind("<Leave>", on_leave)
+        def on_leave(e):
+            btn['bg'] = bg_color
+
+        btn.bind("<Enter>", on_enter)
+        btn.bind("<Leave>", on_leave)
 
         return btn
 

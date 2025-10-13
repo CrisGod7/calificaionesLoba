@@ -66,6 +66,10 @@ class GeneradorExcelConsolidado:
         print("  ✓ Generando Matriz Visual de Errores...")
         self._crear_hoja_matriz_visual()
 
+        # 7. Hoja de Semáforo de Resultados por Grupo
+        print("  ✓ Generando Semáforo de Resultados...")
+        self._crear_hoja_semaforo()
+
         # Guardar archivo
         self.wb.save(ruta_salida)
         print("=" * 70)
@@ -483,6 +487,191 @@ class GeneradorExcelConsolidado:
         # Similar a la hoja de errores pero más compacta
         # (Reutiliza lógica de _crear_hoja_errores pero más visual)
         self._crear_hoja_errores()  # Simplificado por ahora
+
+    def _crear_hoja_semaforo(self):
+        """Crea hoja con semáforo de resultados por grupo."""
+        grupos = self._agrupar_por_grupo()
+
+        for nombre_grupo in sorted(grupos.keys()):
+            alumnos = grupos[nombre_grupo]
+
+            # Limitar nombre de hoja (Excel tiene límite de 31 caracteres)
+            nombre_hoja = f"F.S{nombre_grupo}"[:31]
+            ws = self.wb.create_sheet(nombre_hoja)
+
+            # Colores del semáforo
+            COLOR_AZUL = "4472C4"  # 100-85%
+            COLOR_VERDE = "70AD47"  # 84-70%
+            COLOR_AMARILLO = "FFC000"  # 69-50%
+            COLOR_ROJO = "FF0000"  # <50%
+            COLOR_GRIS = "808080"  # Último lugar
+
+            # ===== ENCABEZADO =====
+            # Logo y título (fusionar celdas para el header)
+            ws.merge_cells('A1:E1')
+            cell = ws['A1']
+            cell.value = 'CURSO INTENSIVO DE\nINGRESO A UNIVERSIDAD'
+            cell.font = Font(size=12, bold=True, color="C00000")  # Rojo corporativo
+            cell.alignment = Alignment(horizontal="right", vertical="center", wrap_text=True)
+            ws.row_dimensions[1].height = 30
+
+            # Título del semáforo
+            ws.merge_cells('A3:E3')
+            cell = ws['A3']
+            cell.value = 'Semáforo de Resultados'
+            cell.font = Font(size=14, bold=True)
+            cell.alignment = Alignment(horizontal="center", vertical="center")
+            ws.row_dimensions[3].height = 25
+
+            # Identificador del grupo
+            ws.merge_cells('F3:G3')
+            cell = ws['F3']
+            cell.value = f'F.S{nombre_grupo}'
+            cell.font = Font(size=14, bold=True, color="C00000")
+            cell.alignment = Alignment(horizontal="center", vertical="center")
+
+            # Subtítulo del examen
+            ws.merge_cells('A4:E4')
+            cell = ws['A4']
+            cell.value = 'EXAMEN SIMULACRO DE ARITMÉTICA'
+            cell.font = Font(size=10, bold=True)
+            cell.alignment = Alignment(horizontal="center", vertical="center")
+            ws.row_dimensions[4].height = 20
+
+            # ===== TABLA DE RESULTADOS =====
+            # Headers
+            row = 5
+            headers = ['POS', 'Nombre', 'Aciertos']
+            header_widths = [8, 40, 12]
+
+            for col, (header, width) in enumerate(zip(headers, header_widths), 1):
+                cell = ws.cell(row, col, header)
+                cell.font = Font(bold=True, color=self.COLOR_BLANCO, size=11)
+                cell.fill = PatternFill(start_color="4472C4",  # Azul para header
+                                        end_color="4472C4",
+                                        fill_type="solid")
+                cell.alignment = Alignment(horizontal="center", vertical="center")
+                cell.border = Border(
+                    left=Side(style='thin'),
+                    right=Side(style='thin'),
+                    top=Side(style='thin'),
+                    bottom=Side(style='thin')
+                )
+                ws.column_dimensions[get_column_letter(col)].width = width
+
+            ws.row_dimensions[row].height = 25
+
+            # ===== DATOS DE ALUMNOS =====
+            # Ordenar alumnos por aciertos (descendente)
+            alumnos_ordenados = sorted(alumnos,
+                                       key=lambda x: x['total_aciertos'],
+                                       reverse=True)
+
+            total_preguntas = alumnos_ordenados[0]['total_preguntas']
+            total_alumnos = len(alumnos_ordenados)
+
+            row = 6
+            for posicion, alumno in enumerate(alumnos_ordenados, 1):
+                # Calcular porcentaje
+                aciertos = alumno['total_aciertos']
+                porcentaje = (aciertos / total_preguntas * 100) if total_preguntas > 0 else 0
+
+                # Determinar color según porcentaje
+                if posicion == total_alumnos:
+                    # Último lugar siempre en gris
+                    color_celda = COLOR_GRIS
+                elif porcentaje >= 85:
+                    color_celda = COLOR_AZUL
+                elif porcentaje >= 70:
+                    color_celda = COLOR_VERDE
+                elif porcentaje >= 50:
+                    color_celda = COLOR_AMARILLO
+                else:
+                    color_celda = COLOR_ROJO
+
+                # Posición
+                cell = ws.cell(row, 1, posicion)
+                cell.alignment = Alignment(horizontal="center", vertical="center")
+                cell.fill = PatternFill(start_color=color_celda,
+                                        end_color=color_celda,
+                                        fill_type="solid")
+                cell.border = Border(
+                    left=Side(style='thin'),
+                    right=Side(style='thin'),
+                    top=Side(style='thin'),
+                    bottom=Side(style='thin')
+                )
+
+                # Color de fuente (blanco para azul, verde y rojo; negro para amarillo y gris)
+                if color_celda in [COLOR_AZUL, COLOR_VERDE, COLOR_ROJO]:
+                    font_color = "FFFFFF"
+                else:
+                    font_color = "000000"
+
+                cell.font = Font(bold=True, color=font_color, size=10)
+
+                # Nombre
+                cell = ws.cell(row, 2, alumno['nombre'])
+                cell.alignment = Alignment(horizontal="left", vertical="center")
+                cell.fill = PatternFill(start_color=color_celda,
+                                        end_color=color_celda,
+                                        fill_type="solid")
+                cell.font = Font(color=font_color, size=10)
+                cell.border = Border(
+                    left=Side(style='thin'),
+                    right=Side(style='thin'),
+                    top=Side(style='thin'),
+                    bottom=Side(style='thin')
+                )
+
+                # Aciertos
+                cell = ws.cell(row, 3, f"{aciertos}/{total_preguntas}")
+                cell.alignment = Alignment(horizontal="center", vertical="center")
+                cell.fill = PatternFill(start_color=color_celda,
+                                        end_color=color_celda,
+                                        fill_type="solid")
+                cell.font = Font(bold=True, color=font_color, size=10)
+                cell.border = Border(
+                    left=Side(style='thin'),
+                    right=Side(style='thin'),
+                    top=Side(style='thin'),
+                    bottom=Side(style='thin')
+                )
+
+                ws.row_dimensions[row].height = 20
+                row += 1
+
+            # ===== LEYENDA DEL SEMÁFORO =====
+            row += 2
+            ws.merge_cells(f'A{row}:C{row}')
+            cell = ws.cell(row, 1, 'LEYENDA')
+            cell.font = Font(size=10, bold=True)
+            cell.alignment = Alignment(horizontal="center", vertical="center")
+
+            row += 1
+            leyenda = [
+                ('85-100%', COLOR_AZUL, "FFFFFF"),
+                ('70-84%', COLOR_VERDE, "FFFFFF"),
+                ('50-69%', COLOR_AMARILLO, "000000"),
+                ('<50%', COLOR_ROJO, "FFFFFF"),
+                ('Último lugar', COLOR_GRIS, "FFFFFF")
+            ]
+
+            for texto, color_fondo, color_texto in leyenda:
+                cell = ws.cell(row, 1, texto)
+                cell.fill = PatternFill(start_color=color_fondo,
+                                        end_color=color_fondo,
+                                        fill_type="solid")
+                cell.font = Font(bold=True, color=color_texto, size=9)
+                cell.alignment = Alignment(horizontal="center", vertical="center")
+                cell.border = Border(
+                    left=Side(style='thin'),
+                    right=Side(style='thin'),
+                    top=Side(style='thin'),
+                    bottom=Side(style='thin')
+                )
+                ws.row_dimensions[row].height = 20
+                row += 1
 
     # Métodos auxiliares
 
